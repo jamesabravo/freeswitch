@@ -83,6 +83,7 @@
 #define ESL_CLAMP(min,max,val)	(ESL_MIN(max,ESL_MAX(val,min)))
 #endif
 
+#define READ_PACKET_BUF_SIZE (1024 * 1024)
 
 /* Written by Marc Espie, public domain */
 #define ESL_CTYPE_NUM_CHARS       256
@@ -1254,6 +1255,7 @@ ESL_DECLARE(esl_status_t) esl_recv_event(esl_handle_t *handle, int check_q, esl_
 	char *col;
 	char *cl;
 	esl_ssize_t len;
+	char *read_packet_buf = NULL;
 
 	if (!handle || !handle->connected || handle->sock == ESL_SOCK_INVALID) {
 		return ESL_FAIL;
@@ -1271,11 +1273,14 @@ ESL_DECLARE(esl_status_t) esl_recv_event(esl_handle_t *handle, int check_q, esl_
 		goto parse_event;
 	}
 
+	read_packet_buf = malloc(READ_PACKET_BUF_SIZE);
+	esl_assert(read_packet_buf);
+
 	while(!revent && handle->connected) {
 		esl_size_t len1;
 		
-		if ((len1 = esl_buffer_read_packet(handle->packet_buf, handle->socket_buf, sizeof(handle->socket_buf) - 1))) {
-			char *data = (char *) handle->socket_buf;
+		if ((len1 = esl_buffer_read_packet(handle->packet_buf, read_packet_buf, READ_PACKET_BUF_SIZE - 1))) {
+			char *data = (char *) read_packet_buf;
 			char *p, *e;
 
 			*(data + len1) = '\0';
@@ -1469,11 +1474,17 @@ ESL_DECLARE(esl_status_t) esl_recv_event(esl_handle_t *handle, int check_q, esl_
 		}
 	}
 
+	if (read_packet_buf)
+		free(read_packet_buf);
+
 	esl_mutex_unlock(handle->mutex);
 
 	return ESL_SUCCESS;
 
  fail:
+
+	if (read_packet_buf)
+		free(read_packet_buf);
 
 	esl_mutex_unlock(handle->mutex);
 
